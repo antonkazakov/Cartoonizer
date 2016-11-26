@@ -22,11 +22,17 @@ import org.opencv.android.Utils;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfDouble;
+import org.opencv.core.MatOfFloat;
+import org.opencv.core.MatOfKeyPoint;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
+import org.opencv.core.MatOfRect;
 import org.opencv.core.Point;
+import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
+import org.opencv.features2d.FeatureDetector;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.objdetect.HOGDescriptor;
 
@@ -34,18 +40,20 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
 import static android.R.attr.bitmap;
 
-public class FileChooserActivity extends AppCompatActivity {
+public class Bob extends AppCompatActivity {
 
     Button btnCamera;
     String TAG = "CARTOON";
     private ImageView cartoonView;
 
-
+    List<MatOfPoint> contours = new ArrayList<MatOfPoint>();
     Bitmap cartoonBMP;
     CartoonFilter cf;
 
@@ -95,7 +103,7 @@ public class FileChooserActivity extends AppCompatActivity {
                     try {
                         InputStream imageStream = getContentResolver().openInputStream(data.getData());
 
-                        init(getResizedBitmap(BitmapFactory.decodeStream(imageStream),800));
+                        peopleDetect(getResizedBitmap(BitmapFactory.decodeStream(imageStream),800));
 
                     } catch (FileNotFoundException e) {
                         e.printStackTrace();
@@ -105,7 +113,7 @@ public class FileChooserActivity extends AppCompatActivity {
             case 10001:
                 if (resultCode == Activity.RESULT_OK) {
                     Uri takenPhotoUri = getPhotoFileUri("tempPhoto.jpg");
-                    init(getResizedBitmap(BitmapFactory.decodeFile(takenPhotoUri.getPath()),800));
+                    peopleDetect(getResizedBitmap(BitmapFactory.decodeFile(takenPhotoUri.getPath()),800));
                 }
                 break;
         }
@@ -119,21 +127,50 @@ public class FileChooserActivity extends AppCompatActivity {
     }
 
 
-    private void init(Bitmap bitmap){
-        imgMat = new Mat();
-        output = new Mat();
 
-        Utils.bitmapToMat(bitmap,imgMat);
+    public void peopleDetect (Bitmap bitmap) {
+        //Bitmap bitmap = null;
+        float execTime;
 
-        cf = new CartoonFilter();
-        cf.processFrame(imgMat, output);
+        long time = System.currentTimeMillis();
+        // Создаем матрицу изображения для OpenCV и помещаем в нее нашу фотографию
+        Mat mat = new Mat();
+        Utils.bitmapToMat(bitmap, mat);
+        Imgproc.GaussianBlur(mat, mat, new Size(11,11), 0);
+        Imgproc.cvtColor(mat, mat, Imgproc.COLOR_RGB2GRAY, 4);
 
-        Bitmap tmp = Bitmap.createBitmap(output.cols(), output.rows(), Bitmap.Config.ARGB_8888);
-        Utils.matToBitmap(output, tmp);
 
+        Imgproc.adaptiveThreshold(mat, mat, 255, Imgproc.ADAPTIVE_THRESH_MEAN_C, Imgproc.THRESH_BINARY, 5, 2);
+        Core.bitwise_not(mat, mat);
 
-        cartoonView.setImageBitmap(tmp);
+// 4) Dilate -> fill the image using the MORPH_DILATE
+        Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_DILATE, new Size(3,3), new Point(1,1));
+        Imgproc.dilate(mat, mat, kernel);
+
+        Imgproc.findContours(mat, contours, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+
+        double maxArea = 200;
+        float[] radius = new float[1];
+        Point center = new Point();
+        for (int i = 0; i < contours.size(); i++) {
+            MatOfPoint c = contours.get(i);
+            if (Imgproc.contourArea(c) > maxArea) {
+                MatOfPoint2f c2f = new MatOfPoint2f(c.toArray());
+                Imgproc.minEnclosingCircle(c2f, center, radius);
+                if (radius[0]<40){
+                Imgproc.circle(mat, center, (int)radius[0], new Scalar(255, 0, 0), 2);}
+            }
+
+        }
+
+        Utils.matToBitmap( mat , bitmap );
+
+        cartoonView.setImageBitmap(bitmap);
     }
+
+
+
+
 
     public  Uri getPhotoFileUri(String fileName) {
 
