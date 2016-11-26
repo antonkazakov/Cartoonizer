@@ -54,11 +54,8 @@ public class Bob extends AppCompatActivity {
     private ImageView cartoonView;
 
     List<MatOfPoint> contours = new ArrayList<MatOfPoint>();
-    Bitmap cartoonBMP;
-    CartoonFilter cf;
 
-    Mat output;
-    Mat imgMat;
+    
     Button btnGallery;
     static{ System.loadLibrary("opencv_java3"); }
     @Override
